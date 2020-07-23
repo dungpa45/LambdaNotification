@@ -35,85 +35,117 @@ def emoji(NewStateValue):
 def lambda_handler(event, context):
     logger.info(json.dumps(event))
 
-    # Basic exception handling. If anything goes wrong, logging the exception
+    # Basic exception handling. If anything goes wrong, logging the exception    
     try:
         # Reading the message "Message" field from the SNS message
         snsSubject = event['Records'][0]['Sns']['Subject']
         snsMessage = json.loads(event['Records'][0]['Sns']['Message'])
         snsArn = event["Records"][0]["Sns"]["TopicArn"]
-        print(snsMessage)
-
-        if snsSubject[0:5] == "ALARM" or snsSubject[0:2] == "OK" or snsSubject[0:12] == "INSUFFICIENT":
-            AlarmName = snsMessage['AlarmName']
-            AlarmDescription = snsMessage['AlarmDescription']
-            if AlarmDescription is None:
-                AlarmDescription = " "
-            AccountID = snsMessage["AWSAccountId"]
-            Account_Name = orga_client.describe_account(AccountId=AccountID)['Account']['Name']
-            NewStateValue = snsMessage['NewStateValue']
-            OldStateValue = snsMessage['OldStateValue']
-            Region = snsMessage['Region']
-            Dimensions = str(snsMessage['Trigger']['Dimensions'])
-            NewStateReason = snsMessage['NewStateReason']
-
-            if snsArn == "arn:aws:sns:us-east-1:700808010711:OMMS-Alarm-Virginia":
-                emo = emoji(NewStateValue)
-                tmp = "[SES] ALARMS\n\n[" + NewStateValue + "]  "+ emo+emo+emo + "\nAlarm Name: " + AlarmName + \
-                "\n" + AlarmDescription + \
-                "\nAccount ID: " + AccountID + \
-                "\nAccount Name: " + Account_Name + \
-                "\n\nRegion: " + Region + \
-                "\nDimensions: " + Dimensions + \
-                "\n\nNew State Reason: \n" + NewStateReason
+        if snsSubject:
+            print(snsMessage)
+            if snsSubject[0:5] == "ALARM" or snsSubject[0:2] == "OK" or snsSubject[0:12] == "INSUFFICIENT":
+                AlarmName = snsMessage['AlarmName']
+                AlarmDescription = snsMessage['AlarmDescription']
+                if AlarmDescription is None:
+                    AlarmDescription = " "
+                AccountID = snsMessage["AWSAccountId"]
+                Account_Name = orga_client.describe_account(AccountId=AccountID)['Account']['Name']
+                NewStateValue = snsMessage['NewStateValue']
+                OldStateValue = snsMessage['OldStateValue']
+                Region = snsMessage['Region']
+                Dimensions = str(snsMessage['Trigger']['Dimensions'])
+                NewStateReason = snsMessage['NewStateReason']
+                
+                if snsArn == "arn:aws:sns:us-east-1:700808010711:OMMS-Alarm-Virginia":
+                    emo = emoji(NewStateValue)
+                    tmp = "[SES] ALARMS\n\n[" + NewStateValue + "]  "+ emo+emo+emo + "\nAlarm Name: " + AlarmName + \
+                    "\n" + AlarmDescription + \
+                    "\nAccount ID: " + AccountID + \
+                    "\nAccount Name: " + Account_Name + \
+                    "\n\nRegion: " + Region + \
+                    "\nDimensions: " + Dimensions + \
+                    "\n\nNew State Reason: \n" + NewStateReason
+                else:    
+                    emo = emoji(NewStateValue)
+                    tmp = "OMMS ALARMS\n\n[" + NewStateValue + "]  "+ emo+emo+emo + "\nAlarm Name: " + AlarmName + \
+                    "\n" + AlarmDescription + \
+                    "\n\nAccount ID: " + AccountID + \
+                    "\n\nRegion: " + Region + \
+                    "\nDimensions: " + Dimensions + \
+                    "\n\nNew State Reason: \n" + NewStateReason
+    
+                message = process_message(tmp)
+                
+            elif snsSubject == "RDS Notification Message":
+                eventSource = snsMessage['Event Source']
+                eventTime = snsMessage['Event Time']
+                sourceId = snsMessage['Source ID']
+                eventMessage = snsMessage['Event Message']
+                emo = u'\U0001F4F7' #camera
+                tmp = "[RDS] NOTIFICATION MESSAGE\n" + emo+emo+emo + \
+                "\nEvent Source: " + eventSource + \
+                "\nSource ID: " + sourceId + \
+                "\nEvent time: " + eventTime + \
+                "\nMessage: " + eventMessage
+                
+                message = process_message(tmp)
+            
+            elif snsSubject[0:12] == "Auto Scaling":
+                print(snsSubject)
+                Description = snsMessage['Description']
+                AutoScalingGroupARN = snsMessage['AutoScalingGroupARN']
+                AutoScalingGroupName = snsMessage['AutoScalingGroupName']
+                Cause = snsMessage['Cause']
+                Event = snsMessage['Event']
+                if Description[0:11] == "Terminating":
+                    emo = u'\U0001F480'
+                else:
+                    emo = u'\U0001F607'
+                tmp = "[SCALING] NOTIFICATION\n\n" + Event + "  "+emo+emo+emo +\
+                "\nGroup: " + AutoScalingGroupName + \
+                "\nDescription: " + Description + \
+                "\n\nCause: " + Cause
+                
+                message = process_message(tmp)
+            
+            # elif snsSubject == None:
+            #     print(snsMessage)
+            #     tmp = "[ELASTICACHE NOTIFICATION]\n\n"+\
+            #     "Message: "+snsMessage
+                
+            #     message = process_message(tmp)
+            
+            elif snsSubject == "Message nay chua rat nhieu ERROR":
+                print("Day la subject cua SNS:",snsSubject)
+                log_group = snsMessage["logGroup"]
+                log_stream = snsMessage["logStream"]
+                account = snsMessage["owner"]
+                log_event = snsMessage["logEvents"]
+                l_event = [event["message"] for event in log_event]
+                err_event = " -> ".join(l_event)
+                tmp = "[LAMBDA ERROR]\n\nLog Group: "+log_group+\
+                "\nLog Stream: "+log_stream+\
+                "\nAccount: "+account+\
+                "\nEvent Error: -> "+err_event+\
+                "\n\nLink to Logs: https://ap-southeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-southeast-1#logEventViewer:group="+\
+                log_group+";stream="+log_stream
+                
+                message = process_message(tmp)
+            
             else:
-                emo = emoji(NewStateValue)
-                tmp = "OMMS ALARMS\n\n[" + NewStateValue + "]  "+ emo+emo+emo + "\nAlarm Name: " + AlarmName + \
-                "\n" + AlarmDescription + \
-                "\n\nAccount ID: " + AccountID + \
-                "\n\nRegion: " + Region + \
-                "\nDimensions: " + Dimensions + \
-                "\n\nNew State Reason: \n" + NewStateReason
-
-            message = process_message(tmp)
-
-        elif snsSubject == "RDS Notification Message":
-            eventSource = snsMessage['Event Source']
-            eventTime = snsMessage['Event Time']
-            sourceId = snsMessage['Source ID']
-            eventMessage = snsMessage['Event Message']
-            emo = u'\U0001F4F7' #camera
-            tmp = "[RDS] NOTIFICATION MESSAGE\n" + emo+emo+emo + \
-            "\nEvent Source: " + eventSource + \
-            "\nSource ID: " + sourceId + \
-            "\nEvent time: " + eventTime + \
-            "\nMessage: " + eventMessage
-
-            message = process_message(tmp)
-
-        elif snsSubject[0:12] == "Auto Scaling":
-            print(snsSubject)
-            Description = snsMessage['Description']
-            AutoScalingGroupARN = snsMessage['AutoScalingGroupARN']
-            AutoScalingGroupName = snsMessage['AutoScalingGroupName']
-            Cause = snsMessage['Cause']
-            Event = snsMessage['Event']
-            if Description[0:11] == "Terminating":
-                emo = u'\U0001F480'
-            else:
-                emo = u'\U0001F607'
-            tmp = "[SCALING] NOTIFICATION\n\n" + Event + "  "+emo+emo+emo +\
-            "\nGroup: " + AutoScalingGroupName + \
-            "\nDescription: " + Description + \
-            "\n\nCause: " + Cause
-
-            message = process_message(tmp)
-
+                tmp = snsMessage
+                # print("message: " + tmp)
+                message = process_message(tmp)
+                print("not noti on telegram")
+            
         else:
-            tmp = snsMessage
-            # print("message: " + tmp)
+            print(snsMessage)
+            eventCache = list(snsMessage.keys())[0]
+            cacheName = list(snsMessage.values())[0]
+            tmp = "[ELASTICACHE NOTIFICATION]\n\n"+\
+            eventCache+" - "+ cacheName
+            
             message = process_message(tmp)
-            print("not noti on telegram")
-
         # Payload to be set via POST method to Telegram Bot API
         payload = {
             "text": message.encode("utf8"),
@@ -123,6 +155,7 @@ def lambda_handler(event, context):
 
         # # Posting the payload to Telegram Bot API
         requests.post(TELEGRAM_URL, payload)
+        
 
     except Exception as e:
         raise e
